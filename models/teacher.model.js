@@ -9,4 +9,6 @@ const TeacherSchema = new mongoose.Schema({
   role: { type: String, default: "teacher" }
 }, { timestamps: true });
 
+
+
 module.exports = mongoose.model("teachers", TeacherSchema);

@@ -6,6 +6,8 @@ const mongoose = require("mongoose");
 const teacherRoutes = require("./routes/teacher.routes.js");
 const studentRoutes = require("./routes/student.routes.js");
 const authRoutes = require("./routes/auth.routes");
+const path = require("path");
+
 
 
 const app = express();
@@ -13,6 +15,8 @@ const app = express();
 // Middlewares
 app.use(express.json());
 app.use(cors());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 
 // ✅ Configure session
 app.use(
