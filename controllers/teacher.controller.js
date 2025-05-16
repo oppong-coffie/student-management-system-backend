@@ -2,6 +2,9 @@ const assignmentsModel = require("../models/assignments.model");
 const StudyMaterial = require("../models/studyMaterial.model")
 const LiveClass = require('../models/Liveclass'); // adjust path to your model
 const Student = require('../models/user.model')
+const Subject = require('../models/Subject');
+const Timetable = require('../models/Timetable');
+const User = require('../models/user.model');
 const path = require('path');
 const multer = require('multer');
 // Multer storage configuration
@@ -327,14 +330,138 @@ const deleteStudent = async (req, res) => {
 };
   //END:: Delete student
 
+// GET /api/subjects
+const getAllSubjects = async (req, res) => {
+  try {
+    const subjects = await Subject.find().sort({ name: 1 }); // sorted alphabetically
+    const subjectNames = subjects.map((subj) => subj.name); // return only names
+    res.status(200).json(subjectNames);
+  } catch (err) {
+    console.error('Error fetching subjects:', err.message);
+    res.status(500).json({ error: 'Server error fetching subjects' });
+  }
+};
 
+// POST /api/subjects
+const createSubject = async (req, res) => {
+  const { name, code } = req.body;
+  if (!name) return res.status(400).json({ error: 'Subject name is required' });
 
+  try {
+    const existing = await Subject.findOne({ name });
+    if (existing) return res.status(409).json({ error: 'Subject already exists' });
 
+    const newSubject = new Subject({ name, code });
+    await newSubject.save();
 
+    res.status(201).json({ message: 'Subject added', subject: newSubject });
+  } catch (err) {
+    console.error('Error creating subject:', err.message);
+    res.status(500).json({ error: 'Server error adding subject' });
+  }
+};
 
+// GET /api/timetable
+const getTimetable = async (req, res) => {
+  try {
+    let timetable = await Timetable.findOne().sort({ createdAt: -1 }); // Get latest if multiple
+
+    if (!timetable) {
+      return res.status(200).json({ timetable: {} }); // Return empty for first-time setup
+    }
+
+    return res.status(200).json({ timetable: timetable.timetable });
+  } catch (error) {
+    console.error('Error fetching timetable:', error);
+    return res.status(500).json({ error: 'Server error while fetching timetable' });
+  }
+};
+
+// POST /api/timetable
+const saveTimetable = async (req, res) => {
+  try {
+    const { timetable } = req.body;
+
+    if (!timetable || typeof timetable !== 'object') {
+      return res.status(400).json({ error: 'Invalid timetable format' });
+    }
+
+    const newTimetable = new Timetable({ timetable });
+    await newTimetable.save();
+
+    return res.status(201).json({ message: 'Timetable saved successfully ✅' });
+  } catch (error) {
+    console.error('Error saving timetable:', error);
+    return res.status(500).json({ error: 'Server error while saving timetable' });
+  }
+};
+
+// START:: POST /students
+// Function to generate a new index number like "STU00001"
+const generateIndexNumber = async () => {
+  const lastStudent = await User.findOne({ role: 'student' }).sort({ createdAt: -1 });
+
+  let nextNumber = 1;
+  if (lastStudent && lastStudent.indexnumber) {
+    const lastNumber = parseInt(lastStudent.indexnumber.replace('STU', ''), 10);
+    nextNumber = lastNumber + 1;
+  }
+
+  return `STU${nextNumber.toString().padStart(5, '0')}`;
+};
+
+const postStudents = async (req, res) => {
+  try {
+    const { name, email, phone, password, parent } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Missing required student fields' });
+    }
+
+    // Check if student email already exists
+    const existingStudent = await User.findOne({ email });
+    if (existingStudent) {
+      return res.status(409).json({ message: 'Student with this email already exists' });
+    }
+
+    // Auto-generate index number
+    const indexnumber = await generateIndexNumber();
+
+    // Optional: validate parent data if provided
+    let parentData = undefined;
+    if (parent && parent.email) {
+      parentData = {
+        name: parent.name || '',
+        email: parent.email,
+        phone: parent.phone || '',
+        password: parent.password || '',
+        role: 'parent',
+      };
+    }
+
+    const newStudent = new User({
+      name,
+      email,
+      phone,
+      password,
+      role: 'student',
+      indexnumber,
+      parent: parentData,
+    });
+
+    const savedStudent = await newStudent.save();
+    res.status(201).json({ message: 'Student created successfully', student: savedStudent });
+  } catch (error) {
+    console.error('Error creating student:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// END:: POST /students
 
 
 // Export all functions properly
-module.exports = { postAssignments, deleteStudent, updateStudent, getStudentById, getAllStudents, deleteLiveClass, getLiveClass, addLiveClass, getAssignments, editAssignments, deleteAssignment, uploadResources,   getAllMaterials,
+module.exports = { postAssignments, postStudents, getTimetable, saveTimetable,  getAllSubjects, createSubject, deleteStudent, updateStudent, getStudentById, getAllStudents, deleteLiveClass, getLiveClass, addLiveClass, getAssignments, editAssignments, deleteAssignment, uploadResources,   getAllMaterials,
     updateMaterial,
     deleteMaterial };

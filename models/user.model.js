@@ -5,7 +5,7 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     phone: { type: String },
     password: { type: String, required: true },
-    role: { type: String, required: true }, // "student", "teacher", "parent"
+    role: { type: String, }, // "student", "teacher", "parent"
 
     indexnumber: { type: String }, // Only for students
 

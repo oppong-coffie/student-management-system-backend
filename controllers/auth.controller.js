@@ -54,7 +54,7 @@ exports.login = async (req, res) => {
         if (parentOwner) {
             const parent = parentOwner.parent;
             if (parent.password !== password) {
-                return res.status(400).json({ message: "Incorrect password" });
+                return res.status(400).json({ message: "Incorrect parent password" });
             }
 
             return res.json({
