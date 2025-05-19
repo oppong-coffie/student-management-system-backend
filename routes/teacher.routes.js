@@ -1,6 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const { postAssignments, postStudents, getTimetable, saveTimetable, deleteStudent, updateStudent, getStudentById, getAllStudents, deleteLiveClass, getAssignments, editAssignments, addLiveClass, getLiveClass, deleteAssignment, uploadResources, getAllMaterials, updateMaterial, deleteMaterial,  getAllSubjects, createSubject, } = require("../controllers/teacher.controller.js");
+const { postAssignments, postStudents,   postNotification,
+    getNotifications,
+    updateNotification, saveResults,
+    deleteNotification, getResults, getTimetable, saveTimetable, deleteStudent, updateStudent, getStudentById, getAllStudents, deleteLiveClass, getAssignments, editAssignments, addLiveClass, getLiveClass, deleteAssignment, uploadResources, getAllMaterials, updateMaterial, deleteMaterial,  getAllSubjects, createSubject,
+    checkInStudent,
+    checkOutStudent,
+    getAttendanceByDate, } = require("../controllers/teacher.controller.js");
 
 // Define route
 router.post("/postassignments", postAssignments);
@@ -29,5 +35,19 @@ router.post('/subjects', createSubject);
 
 router.get('/timetable', getTimetable);
 router.post('/timetable', saveTimetable);
+
+router.post('/notifications', postNotification);
+router.get('/notifications', getNotifications);
+router.put('/notifications/:id', updateNotification);
+router.delete('/notifications/:id', deleteNotification);
+
+
+
+router.get("/results", getResults);
+router.post("/save-results", saveResults);
+
+router.post("/attendance/check-in", checkInStudent)
+router.post("/attendance/check-out", checkOutStudent)
+router.get('/attendance', getAttendanceByDate)
 
 module.exports = router; // Export router

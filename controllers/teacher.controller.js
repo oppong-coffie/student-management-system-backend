@@ -2,12 +2,20 @@ const assignmentsModel = require("../models/assignments.model");
 const StudyMaterial = require("../models/studyMaterial.model")
 const LiveClass = require('../models/Liveclass'); // adjust path to your model
 const Student = require('../models/user.model')
+const Result = require("../models/Result");
 const Subject = require('../models/Subject');
+const Notification = require('../models/Notification');
 const Timetable = require('../models/Timetable');
 const User = require('../models/user.model');
 const path = require('path');
 const multer = require('multer');
+const Attendance = require('../models/AttendanceModel');
+const moment = require('moment'); // Optional for date formatting
+const axios = require("axios");
+
 // Multer storage configuration
+
+
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
       cb(null, 'uploads/'); // Make sure this folder exists
@@ -457,11 +465,230 @@ const postStudents = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
-
 // END:: POST /students
 
 
+
+// CREATE notification
+const postNotification = async (req, res) => {
+  try {
+    const { title, message } = req.body;
+    const newNotice = new Notification({ title, message });
+    const saved = await newNotice.save();
+    res.status(201).json(saved);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create notification' });
+  }
+};
+
+// READ all notifications
+const getNotifications = async (req, res) => {
+  try {
+    const notices = await Notification.find().sort({ date: -1 });
+    res.status(200).json(notices);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+};
+
+// UPDATE notification by ID
+const updateNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, message } = req.body;
+
+    const updated = await Notification.findByIdAndUpdate(
+      id,
+      { title, message },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update notification' });
+  }
+};
+
+// DELETE notification by ID
+const deleteNotification = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await Notification.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    res.status(200).json({ message: 'Notification deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete notification' });
+  }
+};
+
+
+// GET: /teachers/results
+const getResults = async (req, res) => {
+  try {
+    // Fetch all results and populate student name
+    const results = await Result.find();
+
+    res.json( results);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+
+
+// POST /save-results
+const saveResults = async (req, res) => {
+  try {
+    const payload = req.body; // Array of student results
+
+    for (const student of payload) {
+      const { studentId, ...subjects } = student;
+
+      await Result.findOneAndUpdate(
+        { studentId },
+        { studentId, results: subjects },
+        { upsert: true, new: true }
+      );
+    }
+
+    res.status(200).json({ message: 'Results saved successfully' });
+  } catch (error) {
+    console.error('Error saving results:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+
+const checkInStudent = async (req, res) => {
+  const { studentId } = req.body;
+  const today = moment().format("YYYY-MM-DD");
+
+  try {
+    let attendance = await Attendance.findOne({ studentId, date: today });
+
+    if (attendance) {
+      return res.status(400).json({ message: "Already checked in today" });
+    }
+
+    attendance = new Attendance({
+      studentId,
+      date: today,
+      checkInTime: new Date().toISOString(),
+    });
+    await attendance.save();
+
+    // Fetch student
+    const student = await Student.findById(studentId);
+    if (!student || !student.parent?.phone) {
+      return res.status(404).json({ message: "Student or parent's phone number not found" });
+    }
+
+    // Send SMS
+    const smsapikey = "d97868cc69d36af20e76";
+    const message = `Hi, your child ${student.name} has checked in`;
+    const to = student.parent.phone;
+    const sender_id = "PrestigeLab";
+
+    const smsUrl = `https://sms.smsnotifygh.com/smsapi?key=${smsapikey}&to=${to}&msg=${encodeURIComponent(
+      message
+    )}&sender_id=${sender_id}`;
+
+    await axios.get(smsUrl);
+
+    return res.json({ message: "Checked in successfully", attendance });
+  } catch (error) {
+    console.error("Check-in error:", error.message);
+    return res.status(500).json({ message: "Check-in failed" });
+  }
+};
+
+const checkOutStudent = async (req, res) => {
+  const { studentId } = req.body;
+  const today = moment().format("YYYY-MM-DD");
+
+  try {
+    // Check if attendance exists
+    let attendance = await Attendance.findOne({ studentId, date: today });
+
+    if (!attendance) {
+      return res.status(400).json({ message: "Not checked in yet today" });
+    }
+
+    if (attendance.checkOutTime) {
+      return res.status(400).json({ message: "Already checked out today" });
+    }
+
+    // Update attendance
+    attendance.checkOutTime = new Date().toISOString();
+    await attendance.save();
+
+    // Fetch student info
+    const student = await Student.findById(studentId);
+    if (!student || !student.parent?.phone) {
+      return res.status(404).json({ message: "Student or parent's phone number not found" });
+    }
+
+    // Send SMS
+    const smsapikey = "d97868cc69d36af20e76";
+    const message = `Hi, your child ${student.name} has checked out`;
+    const to = student.parent.phone;
+    const sender_id = "PrestigeLab";
+
+    const smsUrl = `https://sms.smsnotifygh.com/smsapi?key=${smsapikey}&to=${to}&msg=${encodeURIComponent(
+      message
+    )}&sender_id=${sender_id}`;
+
+    await axios.get(smsUrl);
+
+    return res.json({ message: "Checked out successfully", attendance });
+  } catch (error) {
+    console.error("Check-out error:", error.message);
+    return res.status(500).json({ message: "Check-out failed" });
+  }
+};
+
+const getAttendanceByDate = async (req, res) => {
+  const { date } = req.query;
+
+  if (!date) {
+    return res.status(400).json({ error: 'Date is required in query (YYYY-MM-DD)' });
+  }
+
+  try {
+    const records = await Attendance.find({ date });
+    res.json(records);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch attendance' });
+  }
+};
+
+
+
+
+
+
+
 // Export all functions properly
-module.exports = { postAssignments, postStudents, getTimetable, saveTimetable,  getAllSubjects, createSubject, deleteStudent, updateStudent, getStudentById, getAllStudents, deleteLiveClass, getLiveClass, addLiveClass, getAssignments, editAssignments, deleteAssignment, uploadResources,   getAllMaterials,
+module.exports = {   postNotification,
+  getNotifications, checkInStudent, checkOutStudent,
+  updateNotification, getAttendanceByDate,
+  deleteNotification,  getResults, saveResults,
+  postAssignments, postStudents, getTimetable, saveTimetable,  getAllSubjects, createSubject, deleteStudent, updateStudent, getStudentById, getAllStudents, deleteLiveClass, getLiveClass, addLiveClass, getAssignments, editAssignments, deleteAssignment, uploadResources,   getAllMaterials,
     updateMaterial,
     deleteMaterial };

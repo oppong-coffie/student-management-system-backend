@@ -1,9 +1,11 @@
 const express = require("express");
-const submitAssignment = require("../controllers/student.controller");
+const { submitAssignment, getOneResult } = require("../controllers/student.controller");
 const router = express.Router();
 
-// Define route
+// Define routes
 router.post("/submit", submitAssignment);
 
+// 👇 This now matches: GET /students/:studentId
+router.get("/:studentId", getOneResult);
 
-module.exports = router; // Export router
+module.exports = router;

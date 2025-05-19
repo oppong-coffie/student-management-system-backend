@@ -5,6 +5,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const teacherRoutes = require("./routes/teacher.routes.js");
 const studentRoutes = require("./routes/student.routes.js");
+const parentRoutes = require("./routes/parent.routes.js");
 const authRoutes = require("./routes/auth.routes");
 const path = require("path");
 
@@ -30,6 +31,9 @@ app.use(
 
 // Use teacher routes
 app.use("/teachers", teacherRoutes);
+
+// Use Parent routes
+app.use("/parents", parentRoutes);
 
 // Use students routes
 app.use("/students", studentRoutes);

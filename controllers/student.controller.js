@@ -1,4 +1,8 @@
 const assignmentsModel = require("../models/assignments.model");
+const StudentModel = require("../models/user.model");
+const ResultModel = require("../models/Result");
+const mongoose = require('mongoose');
+
 
 const submitAssignment = async (req, res) => {
     try {
@@ -41,4 +45,37 @@ const submitAssignment = async (req, res) => {
     }
 };
 
-module.exports = submitAssignment;
+const getOneResult = async (req, res) => {
+    const { studentId } = req.params;
+  
+    // ✅ 1. Check if studentId exists
+    if (!studentId) {
+      return res.status(400).json({ message: "Missing studentId in request params" });
+    }
+  
+    // ✅ 2. Check if studentId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ message: "Invalid studentId format" });
+    }
+  
+    try {
+      // ✅ 3. Proceed to fetch student and result
+      const student = await StudentModel.findById(studentId);
+      if (!student) return res.status(404).json({ message: "Student not found" });
+  
+      const result = await ResultModel.findOne({ studentId });
+      if (!result) return res.status(404).json({ message: "No results found" });
+  
+      return res.json({
+        studentId,
+        name: student.name,
+        results: result.results,
+      });
+    } catch (err) {
+      console.error("Error in getOneResult:", err);
+      return res.status(500).json({ message: "Server error" });
+    }
+  };
+  
+
+module.exports = {submitAssignment, getOneResult};
