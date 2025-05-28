@@ -12,10 +12,13 @@ const multer = require('multer');
 const Attendance = require('../models/AttendanceModel');
 const moment = require('moment'); // Optional for date formatting
 const axios = require("axios");
+require('dotenv').config();
+const sheets = require('../utils/googleSheetsClient'); // Google Sheets client
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const SHEET_NAME = 'time table'; // Make sure this sheet exists
+
 
 // Multer storage configuration
-
-
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
       cb(null, 'uploads/'); // Make sure this folder exists
@@ -53,20 +56,40 @@ const getAssignments = async (req, res) => {
 
 // START:: Post new assignments
 const postAssignments = async (req, res) => {
-    const { title, dueDate, submissions, questions } = req.body; // Extract only valid fields
+  const { title, dueDate, submissions, questions } = req.body;
 
-    try {
-        const response = await assignmentsModel.create({
-            title, 
-            dueDate, 
-            submissions, 
-            questions // Ensure this is an array of objects
-        });
+  try {
+    const response = await assignmentsModel.create({
+      title,
+      dueDate,
+      submissions,
+      questions,
+    });
 
-        res.json(response);
-    } catch (error) {
-        res.status(500).json({ message: "Error posting assignment", error });
-    }
+    // Flatten questions (as JSON string or count)
+    const questionSummary = Array.isArray(questions) ? JSON.stringify(questions) : '';
+
+    // Save to Google Sheet
+    const values = [[
+      response._id.toString(),
+      title || '',
+      dueDate ? new Date(dueDate).toLocaleDateString() : '',
+      questionSummary,
+      new Date().toLocaleString()
+    ]];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'assignments!A1',
+      valueInputOption: 'RAW',
+      requestBody: { values },
+    });
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error posting assignment:', error);
+    res.status(500).json({ message: "Error posting assignment", error });
+  }
 };
 // END:: Post new assignments
 
@@ -95,19 +118,69 @@ const editAssignments = async (req, res) => {
 
 // START:: Delete Assignment
 const deleteAssignment = async (req, res) => {
-    const { id } = req.params; // Get the assignment ID from URL
+  const { id } = req.params;
 
-    try {
-        const deletedAssignment = await assignmentsModel.findByIdAndDelete(id);
+  try {
+    const deletedAssignment = await assignmentsModel.findByIdAndDelete(id);
 
-        if (!deletedAssignment) {
-            return res.status(404).json({ message: "Assignment not found" });
-        }
-
-        res.json({ message: "Assignment deleted successfully", data: deletedAssignment });
-    } catch (error) {
-        res.status(500).json({ message: "Error deleting assignment", error });
+    if (!deletedAssignment) {
+      return res.status(404).json({ message: "Assignment not found" });
     }
+
+    // 1. Get the sheet metadata to find the sheet ID for "assignments"
+    const sheetMeta = await sheets.spreadsheets.get({
+      spreadsheetId: SPREADSHEET_ID,
+    });
+
+    const assignmentsSheet = sheetMeta.data.sheets.find(
+      sheet => sheet.properties.title.toLowerCase() === 'assignments'
+    );
+
+    if (!assignmentsSheet) {
+      return res.status(404).json({ message: "Google Sheet 'assignments' not found" });
+    }
+
+    const sheetId = assignmentsSheet.properties.sheetId;
+
+    // 2. Get all rows
+    const sheetData = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'assignments!A2:Z', // Skip header
+    });
+
+    const rows = sheetData.data.values || [];
+
+    // 3. Find the index of the row with matching _id
+    const rowIndex = rows.findIndex(row => row[0] === id);
+
+    if (rowIndex === -1) {
+      return res.status(404).json({ message: "Row with matching ID not found in sheet" });
+    }
+
+    // 4. Delete the row
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndex + 1, // Add 1 to skip header
+                endIndex: rowIndex + 2
+              }
+            }
+          }
+        ]
+      }
+    });
+
+    res.json({ message: "Assignment deleted successfully", data: deletedAssignment });
+  } catch (error) {
+    console.error("Error deleting assignment:", error);
+    res.status(500).json({ message: "Error deleting assignment", error });
+  }
 };
 // END:: Delete Assignment
 
@@ -116,20 +189,27 @@ const addLiveClass = async (req, res) => {
   try {
     const { title, description, date, time, link } = req.body;
 
-    // Basic validation (optional)
     if (!title || !description || !date || !time || !link) {
       return res.status(400).json({ message: 'Please fill all required fields.' });
     }
 
-    const newClass = new LiveClass({
-      title,
-      description,
-      date,
-      time,
-      link,
+    // Save to MongoDB
+    const newClass = new LiveClass({ title, description, date, time, link });
+    const savedClass = await newClass.save();
+
+    // Save to Google Sheets
+
+    const values = [[
+      title, description, date, time, link
+    ]];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'live classes!A1', // Make sure this sheet exists
+      valueInputOption: 'RAW',
+      requestBody: { values },
     });
 
-    const savedClass = await newClass.save();
     return res.status(201).json({ message: 'Live class created successfully', data: savedClass });
   } catch (error) {
     console.error('Error adding live class:', error);
@@ -152,6 +232,7 @@ const getLiveClass = async (req, res) => {
 
 //START:: DELETE /teachers/live-classes/:id
 const deleteLiveClass = async (req, res) => {
+  const SHEET_Name = 'live classes';
   const { id } = req.params;
   console.log("Received DELETE request for ID:", id);
 
@@ -160,6 +241,37 @@ const deleteLiveClass = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ message: "Live class not found" });
     }
+
+    const sheetData = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEET_Name}!A2:F`,
+    });
+
+    const rows = sheetData.data.values || [];
+    const rowIndex = rows.findIndex(row => row[0] === deleted.title); // match by title in column A
+
+    if (rowIndex > -1) {
+      const sheetMeta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+      const sheet = sheetMeta.data.sheets.find(s => s.properties.title === SHEET_Name);
+      const sheetId = sheet.properties.sheetId;
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId,
+                dimension: "ROWS",
+                startIndex: rowIndex + 1, // +1 since we skipped header
+                endIndex: rowIndex + 2,
+              },
+            },
+          }],
+        },
+      });
+    }
+
     res.status(200).json({ message: "Live class deleted successfully" });
   } catch (error) {
     console.error("Delete error:", error.message);
@@ -275,7 +387,7 @@ const getAllStudents = async (req, res) => {
       };
     }
 
-    const students = await Student.find(filter).select('name indexnumber');
+    const students = await Student.find(filter).select('name indexnumber phone parent.phone');
     res.status(200).json(students);
   } catch (error) {
     console.error('Error fetching students:', error);
@@ -369,7 +481,7 @@ const createSubject = async (req, res) => {
   }
 };
 
-// GET /api/timetable
+//START:: GET /api/timetable
 const getTimetable = async (req, res) => {
   try {
     let timetable = await Timetable.findOne().sort({ createdAt: -1 }); // Get latest if multiple
@@ -384,8 +496,9 @@ const getTimetable = async (req, res) => {
     return res.status(500).json({ error: 'Server error while fetching timetable' });
   }
 };
+//END:: GET /api/timetable
 
-// POST /api/timetable
+//START:: POST /api/timetable
 const saveTimetable = async (req, res) => {
   try {
     const { timetable } = req.body;
@@ -394,15 +507,73 @@ const saveTimetable = async (req, res) => {
       return res.status(400).json({ error: 'Invalid timetable format' });
     }
 
+    // Save to MongoDB
     const newTimetable = new Timetable({ timetable });
     await newTimetable.save();
 
-    return res.status(201).json({ message: 'Timetable saved successfully ✅' });
+    // Fetch existing data
+    const existing = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEET_NAME}!A2:Z`, // assuming header is in row 1
+    });
+
+    const existingRows = existing.data.values || [];
+
+    // Create a map of existing rows by "Day" (column B / index 1)
+    const existingMap = new Map();
+    existingRows.forEach((row, index) => {
+      const day = row[1]; // Assuming day is in column B
+      if (day) existingMap.set(day, index + 2); // +2: because A2 is row 2
+    });
+
+    // Prepare rows and batch update
+    const requests = [];
+
+    for (const [day, schedule] of Object.entries(timetable)) {
+      const rowValues = [new Date().toLocaleDateString(), day, ...schedule];
+      const rowIndex = existingMap.get(day);
+
+      if (rowIndex) {
+        // Update existing row
+        requests.push({
+          range: `${SHEET_NAME}!A${rowIndex}`,
+          values: [rowValues],
+        });
+      } else {
+        // Append new row
+        requests.push({
+          append: true,
+          values: [rowValues],
+        });
+      }
+    }
+
+    // Process updates
+    for (const req of requests) {
+      if (req.append) {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME}!A1`,
+          valueInputOption: 'RAW',
+          requestBody: { values: req.values },
+        });
+      } else {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: req.range,
+          valueInputOption: 'RAW',
+          requestBody: { values: req.values },
+        });
+      }
+    }
+
+    return res.status(201).json({ message: 'Timetable saved and synced to Google Sheet ✅' });
   } catch (error) {
     console.error('Error saving timetable:', error);
     return res.status(500).json({ error: 'Server error while saving timetable' });
   }
 };
+//END:: POST /api/timetable
 
 // START:: POST /students
 // Function to generate a new index number like "STU00001"
@@ -553,17 +724,39 @@ const getResults = async (req, res) => {
 
 // POST /save-results
 const saveResults = async (req, res) => {
+  const SHEET_NAME_RESULTS = 'results';
   try {
     const payload = req.body; // Array of student results
-
     for (const student of payload) {
-      const { studentId, ...subjects } = student;
+      const { studentId,studentPhone, parentPhone, ...subjects } = student;
 
+      // Save to MongoDB
       await Result.findOneAndUpdate(
         { studentId },
         { studentId, results: subjects },
         { upsert: true, new: true }
       );
+
+      // Prepare data to insert into Google Sheet
+      const sheetRows = Object.entries(subjects).map(([subject, scores]) => [
+        studentId,
+        studentPhone,
+        parentPhone,
+        subject,
+        scores.class_score,
+        scores.exam_score,
+        new Date().toLocaleString(), // Timestamp (optional)
+      ]);
+
+      // Append each subject's score as a new row
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME_RESULTS}!A:E`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: sheetRows
+        }
+      });
     }
 
     res.status(200).json({ message: 'Results saved successfully' });
@@ -580,7 +773,6 @@ const checkInStudent = async (req, res) => {
 
   try {
     let attendance = await Attendance.findOne({ studentId, date: today });
-
     if (attendance) {
       return res.status(400).json({ message: "Already checked in today" });
     }
@@ -592,7 +784,6 @@ const checkInStudent = async (req, res) => {
     });
     await attendance.save();
 
-    // Fetch student
     const student = await Student.findById(studentId);
     if (!student || !student.parent?.phone) {
       return res.status(404).json({ message: "Student or parent's phone number not found" });
@@ -603,12 +794,30 @@ const checkInStudent = async (req, res) => {
     const message = `Hi, your child ${student.name} has checked in`;
     const to = student.parent.phone;
     const sender_id = "PrestigeLab";
-
-    const smsUrl = `https://sms.smsnotifygh.com/smsapi?key=${smsapikey}&to=${to}&msg=${encodeURIComponent(
-      message
-    )}&sender_id=${sender_id}`;
-
+    const smsUrl = `https://sms.smsnotifygh.com/smsapi?key=${smsapikey}&to=${to}&msg=${encodeURIComponent(message)}&sender_id=${sender_id}`;
     await axios.get(smsUrl);
+
+
+    const values = [
+      [
+        student.name,
+        student.phone || "",
+        student.parent.phone || "",
+        today,
+        attendance.checkInTime,
+        "", // Empty check-out field
+        "Check-In"
+      ]
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId:SPREADSHEET_ID,
+      range: 'attendance!A1',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values,
+      },
+    });
 
     return res.json({ message: "Checked in successfully", attendance });
   } catch (error) {
@@ -642,6 +851,26 @@ const checkOutStudent = async (req, res) => {
     if (!student || !student.parent?.phone) {
       return res.status(404).json({ message: "Student or parent's phone number not found" });
     }
+    const values = [
+      [
+        student.name,
+        student.phone || "",
+        student.parent.phone || "",
+        today,
+        attendance.checkInTime,
+        attendance.checkOutTime,
+        "Check-Out"
+      ]
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'attendance!A1',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values,
+      },
+    });
 
     // Send SMS
     const smsapikey = "d97868cc69d36af20e76";
@@ -649,10 +878,7 @@ const checkOutStudent = async (req, res) => {
     const to = student.parent.phone;
     const sender_id = "PrestigeLab";
 
-    const smsUrl = `https://sms.smsnotifygh.com/smsapi?key=${smsapikey}&to=${to}&msg=${encodeURIComponent(
-      message
-    )}&sender_id=${sender_id}`;
-
+    const smsUrl = `https://sms.smsnotifygh.com/smsapi?key=${smsapikey}&to=${to}&msg=${encodeURIComponent(message)}&sender_id=${sender_id}`;
     await axios.get(smsUrl);
 
     return res.json({ message: "Checked out successfully", attendance });
