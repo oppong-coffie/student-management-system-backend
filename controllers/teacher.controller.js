@@ -57,14 +57,8 @@ const getAssignments = async (req, res) => {
 // START:: Post new assignments
 const postAssignments = async (req, res) => {
   const { title, dueDate, submissions, questions } = req.body;
-  if (!title || !dueDate || !Array.isArray(questions)) {
-    return res.status(400).json({ message: "Missing or invalid fields" });
-  }
-  
 
   try {
-    console.log("Incoming assignment data:", req.body); // 👈 Add this
-
     const response = await assignmentsModel.create({
       title,
       dueDate,
