@@ -47,7 +47,7 @@ app.use("/students", studentRoutes);
 app.use("/auth", authRoutes);
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
+mongoose.connect(process.env.MONGODB_LOCAL_URI, {
 }).then(() => {
   console.log("Connected to MongoDB");
 }).catch((err) => {

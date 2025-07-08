@@ -57,8 +57,10 @@ const getAssignments = async (req, res) => {
 // START:: Post new assignments
 const postAssignments = async (req, res) => {
   const { title, dueDate, submissions, questions } = req.body;
+  console.log("Assignment body received:", req.body);
 
   try {
+
     const response = await assignmentsModel.create({
       title,
       dueDate,
