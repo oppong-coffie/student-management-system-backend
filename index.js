@@ -28,6 +28,11 @@ app.use(
       cookie: { secure: false, httpOnly: true }, // Set `secure: true` in production (HTTPS)
   })
 );
+// Basic test route
+app.get('/', (req, res) => {
+  res.send('Server is running!');
+});
+
 
 // Use teacher routes
 app.use("/teachers", teacherRoutes);
