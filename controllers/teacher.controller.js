@@ -767,9 +767,13 @@ const getResults = async (req, res) => {
 
 // POST /save-results
 const saveResults = async (req, res) => {
+  console.log("saving results");
   const SHEET_NAME_RESULTS = "results";
+
   try {
-    const payload = req.body; // Array of student results
+    const payload = req.body; 
+    console.log("PAYLOAD:", payload);
+
     for (const student of payload) {
       const { studentId, studentPhone, parentPhone, ...subjects } = student;
 
@@ -788,18 +792,23 @@ const saveResults = async (req, res) => {
         subject,
         scores.class_score,
         scores.exam_score,
-        new Date().toLocaleString(), // Timestamp (optional)
+        new Date().toLocaleString(),
       ]);
 
-      // Append each subject's score as a new row
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `${SHEET_NAME_RESULTS}!A:E`,
-        valueInputOption: "USER_ENTERED",
-        requestBody: {
-          values: sheetRows,
-        },
-      });
+      // 👇 Safe append: skip if offline or error
+      try {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEET_NAME_RESULTS}!A:G`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: {
+            values: sheetRows,
+          },
+        });
+      } catch (sheetError) {
+        console.error("❌ Failed to sync with Google Sheets:", sheetError.message);
+        // optionally: log to DB or continue silently
+      }
     }
 
     res.status(200).json({ message: "Results saved successfully" });
@@ -808,6 +817,7 @@ const saveResults = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 const checkInStudent = async (req, res) => {
   const { studentId } = req.body;
