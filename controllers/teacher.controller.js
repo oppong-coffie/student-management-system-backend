@@ -57,15 +57,14 @@ const getAssignments = async (req, res) => {
 // START:: Post new assignments
 const postAssignments = async (req, res) => {
   const { title, dueDate, submissions, questions } = req.body;
-
-  console.log("Incoming assignment data:", req.body);
-
-  // Basic validation
   if (!title || !dueDate || !Array.isArray(questions)) {
     return res.status(400).json({ message: "Missing or invalid fields" });
   }
+  
 
   try {
+    console.log("Incoming assignment data:", req.body); // 👈 Add this
+
     const response = await assignmentsModel.create({
       title,
       dueDate,
@@ -73,35 +72,31 @@ const postAssignments = async (req, res) => {
       questions,
     });
 
-    // Summary for Google Sheet
-    const questionSummary = JSON.stringify(questions);
+    // Flatten questions (as JSON string or count)
+    const questionSummary = Array.isArray(questions) ? JSON.stringify(questions) : '';
 
-    try {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'assignments!A1',
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [[
-            response._id.toString(),
-            title,
-            new Date(dueDate).toLocaleDateString(),
-            questionSummary,
-            new Date().toLocaleString()
-          ]]
-        }
-      });
-    } catch (sheetError) {
-      console.error("Google Sheets append failed:", sheetError.message);
-    }
+    // Save to Google Sheet
+    const values = [[
+      response._id.toString(),
+      title || '',
+      dueDate ? new Date(dueDate).toLocaleDateString() : '',
+      questionSummary,
+      new Date().toLocaleString()
+    ]];
 
-    res.status(201).json(response);
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'assignments!A1',
+      valueInputOption: 'RAW',
+      requestBody: { values },
+    });
+
+    res.json(response);
   } catch (error) {
-    console.error('Error posting assignment:', error.message, error.stack);
-    res.status(500).json({ message: "Error posting assignment", error: error.message });
+    console.error('Error posting assignment:', error);
+    res.status(500).json({ message: "Error posting assignment", error });
   }
 };
-
 // END:: Post new assignments
 
 // START:: Update assignment
