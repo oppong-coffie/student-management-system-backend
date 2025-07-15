@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const User = require("../models/user.model");
 const Teacher = require("../models/teacher.model");
 
-// User Registration
+// START:: User Registration
 exports.register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -26,8 +26,9 @@ exports.register = async (req, res) => {
         res.status(500).json({ message: "Server error", error: err.message });
     }
 };
+// END:: User Registration
 
-// User Login
+// START:: User Login
 exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -91,5 +92,7 @@ exports.login = async (req, res) => {
         res.status(500).json({ message: "Server error", error: err.message });
     }
 };
+// END:: User Login
+
 
 
