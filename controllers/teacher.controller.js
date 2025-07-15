@@ -72,24 +72,43 @@ const postAssignments = async (req, res) => {
       : "";
 
     // Save to Google Sheet
-    const values = [
-      [
-        response._id.toString(),
-        title || "",
-        dueDate ? new Date(dueDate).toLocaleDateString() : "",
-        questionSummary,
-        new Date().toLocaleString(),
-      ],
-    ];
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: "assignments!A1",
-      valueInputOption: "RAW",
-      requestBody: { values },
+    const { google } = require("googleapis");
+    const { readFileSync } = require("fs");
+
+    const auth = new google.auth.GoogleAuth({
+      keyFile: "./credentials.json",
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
     });
 
-    res.json(response);
+    async function appendToSheet() {
+      const client = await auth.getClient();
+      const sheets = google.sheets({ version: "v4", auth: client });
+
+      const values = [
+        [
+          response._id.toString(),
+          title || "",
+          dueDate ? new Date(dueDate).toLocaleDateString() : "",
+          questionSummary,
+          new Date().toLocaleString(),
+        ],
+      ];
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: "assignments!A1", // Sheet name + cell range
+        valueInputOption: "RAW",
+        requestBody: {
+          values,
+        },
+      });
+
+      console.log("✅ Data appended to Google Sheet!");
+    }
+
+    appendToSheet().catch(console.error);
+    res.status(200).json({ message: "Assignment saved" });
+
   } catch (error) {
     console.error("Error posting assignment:", error);
     res.status(500).json({ message: "Error posting assignment", error });
@@ -202,7 +221,7 @@ const deleteAssignment = async (req, res) => {
 const addLiveClass = async (req, res) => {
   try {
     const { title, description, date, time, link } = req.body;
-    console.log("SUBMITTED:", req.body)
+    console.log("SUBMITTED:", req.body);
 
     if (!title || !description || !date || !time || !link) {
       return res
@@ -548,6 +567,16 @@ const saveTimetable = async (req, res) => {
     const newTimetable = new Timetable({ timetable });
     await newTimetable.save();
 
+
+       // Save to Google Sheet
+
+       const { google } = require("googleapis");
+       const { readFileSync } = require("fs");
+   
+       const auth = new google.auth.GoogleAuth({
+         keyFile: "./credentials.json",
+         scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+       });
     // Fetch existing data
     const existing = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
@@ -771,7 +800,7 @@ const saveResults = async (req, res) => {
   const SHEET_NAME_RESULTS = "results";
 
   try {
-    const payload = req.body; 
+    const payload = req.body;
     console.log("PAYLOAD:", payload);
 
     for (const student of payload) {
@@ -806,7 +835,10 @@ const saveResults = async (req, res) => {
           },
         });
       } catch (sheetError) {
-        console.error("❌ Failed to sync with Google Sheets:", sheetError.message);
+        console.error(
+          "❌ Failed to sync with Google Sheets:",
+          sheetError.message
+        );
         // optionally: log to DB or continue silently
       }
     }
@@ -817,7 +849,6 @@ const saveResults = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
-
 
 const checkInStudent = async (req, res) => {
   const { studentId } = req.body;
