@@ -2,6 +2,8 @@ const bcrypt = require("bcryptjs");
 const User = require("../models/user.model");
 const Teacher = require("../models/teacher.model");
 
+  
+
 // START:: User Registration
 exports.register = async (req, res) => {
     try {
