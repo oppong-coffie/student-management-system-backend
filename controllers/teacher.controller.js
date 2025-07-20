@@ -7,7 +7,6 @@ const Subject = require("../models/Subject");
 const Notification = require("../models/Notification");
 const Timetable = require("../models/Timetable");
 const User = require("../models/user.model");
-const path = require("path");
 const multer = require("multer");
 const Attendance = require("../models/AttendanceModel");
 const moment = require("moment"); // Optional for date formatting
@@ -16,31 +15,16 @@ require("dotenv").config();
 const sheets = require("../utils/googleSheetsClient"); // Google Sheets client
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const SHEET_NAME = "time table"; // Make sure this sheet exists
+const supabase = require('./supabaseClient');
+const path = require('path');
+const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
+const storage = multer.memoryStorage();
+const upload = multer({ storage }).single('file');
 
-// Multer storage configuration
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/"); // Make sure this folder exists
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
 
-const upload = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /pdf|doc|docx|mp4/;
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowedTypes.test(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only PDF, DOC, DOCX, and MP4 files are allowed"));
-    }
-  },
-}).single("file");
+
+
 
 // START:: fetch assignments
 const getAssignments = async (req, res) => {
@@ -328,7 +312,7 @@ const deleteLiveClass = async (req, res) => {
 };
 //END:: DELETE /teachers/live-classes/:id
 
-// START:: Upload new resource
+// START:: MATERIAL RESOURCES
 const uploadResources = (req, res) => {
   upload(req, res, async function (err) {
     if (err) {
@@ -340,17 +324,38 @@ const uploadResources = (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const fileUrl = `/uploads/${req.file.filename}`;
-
     try {
+      const file = req.file;
+      const fileName = `${Date.now()}_${file.originalname}`;
+
+      // Upload file to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('materials') // replace 'materials' with your bucket name
+        .upload(fileName, file.buffer, {
+          contentType: file.mimetype,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error("Supabase Upload Error:", error);
+        return res.status(500).json({ message: "Upload failed" });
+      }
+
+      // Get public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('materials')
+        .getPublicUrl(fileName);
+
+      const fileUrl = publicUrlData.publicUrl;
+
       const newMaterial = new StudyMaterial({
         title,
         description,
         subject,
         fileUrl,
-        fileName: req.file.originalname,
-        fileType: req.file.mimetype,
-        size: req.file.size,
+        fileName: file.originalname,
+        fileType: file.mimetype,
+        size: file.size,
       });
 
       await newMaterial.save();
@@ -365,9 +370,9 @@ const uploadResources = (req, res) => {
     }
   });
 };
-// END:: Upload new resource
 
-// START:: Fetch all study materials
+
+
 const getAllMaterials = async (req, res) => {
   try {
     const materials = await StudyMaterial.find().sort({ createdAt: -1 });
@@ -378,52 +383,74 @@ const getAllMaterials = async (req, res) => {
       .json({ message: "Failed to fetch materials", error: error.message });
   }
 };
-// End:: Fetch all study materials
 
-// START:: Update one material by id
 const updateMaterial = async (req, res) => {
   try {
     const { id } = req.params;
     const { title, description, subject } = req.body;
 
+    // Ensure at least one field is provided
+    if (!title && !description && !subject) {
+      return res.status(400).json({ message: "No update fields provided" });
+    }
+
     const updated = await StudyMaterial.findByIdAndUpdate(
       id,
-      { title, description, subject },
-      { new: true }
+      { $set: { title, description, subject } },
+      { new: true, runValidators: true }
     );
 
     if (!updated) {
       return res.status(404).json({ message: "Study material not found" });
     }
 
-    res.status(200).json(updated);
+    res.status(200).json({
+      message: "Study material updated successfully",
+      data: updated
+    });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Failed to update material", error: error.message });
+    res.status(500).json({
+      message: "Failed to update material",
+      error: error.message
+    });
   }
 };
-// END:: Update one material by id
 
-// START:: Delete one study material
+
 const deleteMaterial = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deleted = await StudyMaterial.findByIdAndDelete(id);
-
-    if (!deleted) {
+    // Find the material first
+    const material = await StudyMaterial.findById(id);
+    if (!material) {
       return res.status(404).json({ message: "Study material not found" });
     }
 
-    res.status(200).json({ message: "Study material deleted successfully" });
+    // Extract the Supabase file path (assumes you saved filename as key)
+    const filePath = material.fileUrl.split("/").pop(); // get the actual filename
+
+    // Delete from Supabase Storage
+    const { error: storageError } = await supabase.storage
+      .from('materials') // your bucket name
+      .remove([filePath]);
+
+    if (storageError) {
+      console.error("Supabase Storage Delete Error:", storageError);
+      return res.status(500).json({ message: "Failed to delete file from storage" });
+    }
+
+    // Delete from MongoDB
+    await StudyMaterial.findByIdAndDelete(id);
+
+    res.status(200).json({ message: "Study material and file deleted successfully" });
   } catch (error) {
     res
       .status(500)
       .json({ message: "Failed to delete material", error: error.message });
   }
 };
-// END:: Delete one study material
+// END:: MATERIAL RESOURCES
 
 // START:: GET /students
 const getAllStudents = async (req, res) => {
