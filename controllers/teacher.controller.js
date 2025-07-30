@@ -26,7 +26,7 @@ const upload = multer({ storage }).single('file');
 
 
 
-// START:: fetch assignments
+// START::  ASSIGNMENTS
 const getAssignments = async (req, res) => {
   try {
     const response = await assignmentsModel.find();
@@ -35,9 +35,7 @@ const getAssignments = async (req, res) => {
     res.status(500).json({ message: "Error fetching assignments", error });
   }
 };
-// END:: fetch assignments
 
-// START:: Post new assignments
 const postAssignments = async (req, res) => {
   const { title, dueDate, submissions, questions } = req.body;
   console.log("Assignment body received:", req.body);
@@ -98,9 +96,7 @@ const postAssignments = async (req, res) => {
     res.status(500).json({ message: "Error posting assignment", error });
   }
 };
-// END:: Post new assignments
 
-// START:: Update assignment
 const editAssignments = async (req, res) => {
   const { id } = req.params; // Get assignment ID from URL params
   const { title, dueDate, submissions, questions } = req.body;
@@ -124,9 +120,7 @@ const editAssignments = async (req, res) => {
     res.status(500).json({ message: "Error updating assignment", error });
   }
 };
-// END:: Update assignment
 
-// START:: Delete Assignment
 const deleteAssignment = async (req, res) => {
   const { id } = req.params;
 
@@ -199,7 +193,7 @@ const deleteAssignment = async (req, res) => {
     res.status(500).json({ message: "Error deleting assignment", error });
   }
 };
-// END:: Delete Assignment
+// END:: ASSIGNMENTS
 
 // START:: Add live class
 const addLiveClass = async (req, res) => {
@@ -370,8 +364,6 @@ const uploadResources = (req, res) => {
     }
   });
 };
-
-
 
 const getAllMaterials = async (req, res) => {
   try {
@@ -923,15 +915,6 @@ const checkInStudent = async (req, res) => {
       ],
     ];
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: "attendance!A1",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values,
-      },
-    });
-
     return res.json({ message: "Checked in successfully", attendance });
   } catch (error) {
     console.error("Check-in error:", error.message);
@@ -977,15 +960,6 @@ const checkOutStudent = async (req, res) => {
         "Check-Out",
       ],
     ];
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: "attendance!A1",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values,
-      },
-    });
 
     // Send SMS
     const smsapikey = "d97868cc69d36af20e76";
