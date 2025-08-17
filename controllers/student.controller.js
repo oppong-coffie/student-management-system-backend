@@ -3,8 +3,6 @@ const StudentModel = require("../models/user.model");
 const ResultModel = require("../models/Result");
 const TheoryModel = require("../models/TheoryModel");
 const mongoose = require('mongoose');
-import dotenv from "dotenv";
-
 
 const submitAssignment = async (req, res) => {
     try {
