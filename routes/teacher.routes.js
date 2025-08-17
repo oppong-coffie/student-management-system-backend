@@ -1,18 +1,19 @@
 const express = require("express");
 const router = express.Router();
-const { postAssignments, postStudents,   postNotification,
-    getNotifications,
-    updateNotification, saveResults,
-    deleteNotification, getResults, getTimetable, saveTimetable, deleteStudent, updateStudent, getStudentById, getAllStudents, deleteLiveClass, getAssignments, editAssignments, addLiveClass, getLiveClass, deleteAssignment, uploadResources, getAllMaterials, updateMaterial, deleteMaterial,  getAllSubjects, createSubject,
-    checkInStudent,
-    checkOutStudent,
-    getAttendanceByDate, } = require("../controllers/teacher.controller.js");
+const { postAssignments, getTheoryById, deleteTheoryById, updateTheoryById, postStudents, postNotification, getNotifications, updateNotification, saveResults, deleteNotification, getResults, getTimetable, saveTimetable, deleteStudent, updateStudent, getStudentById, getAllStudents, deleteLiveClass, getAssignments, editAssignments, addLiveClass, getLiveClass, deleteAssignment, uploadResources, getAllMaterials, updateMaterial, deleteMaterial,  getAllSubjects, createSubject, checkInStudent, checkOutStudent, postTheory, getTheory, getAttendanceByDate, } = require("../controllers/teacher.controller.js");
 
 // Define route
 router.post("/postassignments", postAssignments);
 router.put("/editassignments/:id", editAssignments);
 router.delete("/deleteassignments/:id", deleteAssignment);
 router.get("/getassignments", getAssignments);
+
+// THEORY QUESTIONS
+router.post("/theory", postTheory);
+router.get("/theory", getTheory);
+router.get("/theory/:id", getTheoryById);
+router.put("/theory/:id", updateTheoryById);
+router.delete("/theory/:id", deleteTheoryById);
 
 router.post("/upload-resource", uploadResources)
 router.get('/study-materials', getAllMaterials);

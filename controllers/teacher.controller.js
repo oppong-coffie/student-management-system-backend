@@ -6,6 +6,7 @@ const Result = require("../models/Result");
 const Subject = require("../models/Subject");
 const Notification = require("../models/Notification");
 const Timetable = require("../models/Timetable");
+const TheoryModel = require("../models/TheoryModel");
 const User = require("../models/user.model");
 const multer = require("multer");
 const Attendance = require("../models/AttendanceModel");
@@ -194,6 +195,104 @@ const deleteAssignment = async (req, res) => {
   }
 };
 // END:: ASSIGNMENTS
+
+// START:: THEORIES
+const postTheory = async (req, res) => {
+  const { title, dueDate, submissions, questions } = req.body;
+  console.log("Assignment body received:", req.body);
+
+  try {
+    const response = await TheoryModel.create({
+      title,
+      dueDate,
+      submissions,
+      questions,
+    });
+    res.status(200).json({ message: "Assignment saved" });
+
+  } catch (error) {
+    console.error("Error posting assignment:", error);
+    res.status(500).json({ message: "Error posting assignment", error });
+  }
+};
+
+const getTheory = async (req, res) => {
+  try {
+    const assignments = await TheoryModel.find().sort({ createdAt: -1 });
+    res.status(200).json(assignments);
+  } catch (error) {
+    console.error("Error fetching theory assignments:", error);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+const getTheoryById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find theory assignment by ID
+    const theory = await TheoryModel.findById(id);
+
+    if (!theory) {
+      return res.status(404).json({ message: "Assignment not found" });
+    }
+
+    res.status(200).json(theory);
+  } catch (error) {
+    console.error("Error fetching assignment by ID:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+const updateTheoryById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = await TheoryModel.findById(id);
+
+    if (!existing) {
+      return res.status(404).json({ message: "Assignment not found" });
+    }
+
+    // Merge existing questions with incoming updates
+    if (req.body.questions) {
+      req.body.questions = req.body.questions.map((q, i) => ({
+        ...existing.questions[i]?._doc, // preserve old data
+        ...q
+      }));
+    }
+
+    const updatedTheory = await TheoryModel.findByIdAndUpdate(
+      id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    res.json(updatedTheory);
+  } catch (error) {
+    console.error("Error updating theory:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const deleteTheoryById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find and delete the theory assignment
+    const deletedAssignment = await TheoryModel.findByIdAndDelete(id);
+
+    if (!deletedAssignment) {
+      return res.status(404).json({ message: "Theory assignment not found" });
+    }
+
+    return res.json({ message: "Theory assignment deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting theory assignment:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+// END:: THEORIES
+
 
 // START:: Add live class
 const addLiveClass = async (req, res) => {
@@ -1003,10 +1102,14 @@ module.exports = {
   getNotifications,
   checkInStudent,
   checkOutStudent,
+  postTheory,
   updateNotification,
   getAttendanceByDate,
   deleteNotification,
   getResults,
+  getTheoryById,
+  updateTheoryById,
+  deleteTheoryById,
   saveResults,
   postAssignments,
   postStudents,
@@ -1027,5 +1130,6 @@ module.exports = {
   uploadResources,
   getAllMaterials,
   updateMaterial,
+  getTheory,
   deleteMaterial,
 };
