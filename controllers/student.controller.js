@@ -1,4 +1,3 @@
-import { ChatOpenAI } from "@langchain/openai";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 const assignmentsModel = require("../models/assignments.model");
 const StudentModel = require("../models/user.model");
@@ -80,66 +79,6 @@ const submitTheoryAnswers = async (req, res) => {
   } catch (error) {
     console.error("Error saving submission:", error);
     res.status(500).json({ message: "Server error" });
-  }
-};
-
-export const submitExercice = async (req, res) => {
-  try {
-    const questions = [
-      {
-        question: "What is a noun?",
-        correctAnswer: "A noun is a name of a person, place or thing",
-        userAnswer: "It is a word for a person"
-      },
-      {
-        question: "What is a name?",
-        correctAnswer: "A name is an identity of a person, place or thing",
-        userAnswer: "Something used to identify"
-      },
-      {
-        question: "Give 2 examples of a country name",
-        correctAnswer: "Ghana, Togo",
-        userAnswer: "Ghana and Nigeria"
-      }
-    ];
-
-    const model = new ChatOpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      modelName: "gpt-4o",
-      temperature: 0.0,
-    });
-
-    const prompt = ChatPromptTemplate.fromMessages([
-      [
-        "system",
-        `Compare the question, correct answer, and the user's input.
-Return ONLY the rating number from 0 to 100 with no explanation.
-Question: {question}
-Correct Answer: {correctAnswer}`
-      ],
-      ["human", "{userAnswer}"],
-    ]);
-
-    const chain = prompt.pipe(model);
-
-    let totalScore = 0;
-
-    for (let q of questions) {
-      const resAI = await chain.invoke({
-        question: q.question,
-        correctAnswer: q.correctAnswer,
-        userAnswer: q.userAnswer
-      });
-      totalScore += parseFloat(resAI.content.trim()) || 0;
-    }
-
-    const percentage = (totalScore / questions.length).toFixed(2);
-
-    res.json({ score: percentage });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Failed to evaluate exercise" });
   }
 };
 
