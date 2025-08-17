@@ -1,4 +1,3 @@
-import { ChatPromptTemplate } from "@langchain/core/prompts";
 const assignmentsModel = require("../models/assignments.model");
 const StudentModel = require("../models/user.model");
 const ResultModel = require("../models/Result");
