@@ -112,4 +112,4 @@ const getOneResult = async (req, res) => {
   };
   
 
-module.exports = {submitAssignment, submitTheoryAnswers, submitExercice, getOneResult};
+module.exports = {submitAssignment, submitTheoryAnswers, getOneResult};
