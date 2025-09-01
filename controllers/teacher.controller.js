@@ -688,68 +688,68 @@ const saveTimetable = async (req, res) => {
 
        // Save to Google Sheet
 
-       const { google } = require("googleapis");
-       const { readFileSync } = require("fs");
+    //    const { google } = require("googleapis");
+    //    const { readFileSync } = require("fs");
    
-       const auth = new google.auth.GoogleAuth({
-         keyFile: "./credentials.json",
-         scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-       });
-    // Fetch existing data
-    const existing = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A2:Z`, // assuming header is in row 1
-    });
+    //    const auth = new google.auth.GoogleAuth({
+    //      keyFile: "./credentials.json",
+    //      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    //    });
+    // // Fetch existing data
+    // const existing = await sheets.spreadsheets.values.get({
+    //   spreadsheetId: SPREADSHEET_ID,
+    //   range: `${SHEET_NAME}!A2:Z`, // assuming header is in row 1
+    // });
 
-    const existingRows = existing.data.values || [];
+    // const existingRows = existing.data.values || [];
 
-    // Create a map of existing rows by "Day" (column B / index 1)
-    const existingMap = new Map();
-    existingRows.forEach((row, index) => {
-      const day = row[1]; // Assuming day is in column B
-      if (day) existingMap.set(day, index + 2); // +2: because A2 is row 2
-    });
+    // // Create a map of existing rows by "Day" (column B / index 1)
+    // const existingMap = new Map();
+    // existingRows.forEach((row, index) => {
+    //   const day = row[1]; // Assuming day is in column B
+    //   if (day) existingMap.set(day, index + 2); // +2: because A2 is row 2
+    // });
 
-    // Prepare rows and batch update
-    const requests = [];
+    // // Prepare rows and batch update
+    // const requests = [];
 
-    for (const [day, schedule] of Object.entries(timetable)) {
-      const rowValues = [new Date().toLocaleDateString(), day, ...schedule];
-      const rowIndex = existingMap.get(day);
+    // for (const [day, schedule] of Object.entries(timetable)) {
+    //   const rowValues = [new Date().toLocaleDateString(), day, ...schedule];
+    //   const rowIndex = existingMap.get(day);
 
-      if (rowIndex) {
-        // Update existing row
-        requests.push({
-          range: `${SHEET_NAME}!A${rowIndex}`,
-          values: [rowValues],
-        });
-      } else {
-        // Append new row
-        requests.push({
-          append: true,
-          values: [rowValues],
-        });
-      }
-    }
+    //   if (rowIndex) {
+    //     // Update existing row
+    //     requests.push({
+    //       range: `${SHEET_NAME}!A${rowIndex}`,
+    //       values: [rowValues],
+    //     });
+    //   } else {
+    //     // Append new row
+    //     requests.push({
+    //       append: true,
+    //       values: [rowValues],
+    //     });
+    //   }
+    // }
 
-    // Process updates
-    for (const req of requests) {
-      if (req.append) {
-        await sheets.spreadsheets.values.append({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A1`,
-          valueInputOption: "RAW",
-          requestBody: { values: req.values },
-        });
-      } else {
-        await sheets.spreadsheets.values.update({
-          spreadsheetId: SPREADSHEET_ID,
-          range: req.range,
-          valueInputOption: "RAW",
-          requestBody: { values: req.values },
-        });
-      }
-    }
+    // // Process updates
+    // for (const req of requests) {
+    //   if (req.append) {
+    //     await sheets.spreadsheets.values.append({
+    //       spreadsheetId: SPREADSHEET_ID,
+    //       range: `${SHEET_NAME}!A1`,
+    //       valueInputOption: "RAW",
+    //       requestBody: { values: req.values },
+    //     });
+    //   } else {
+    //     await sheets.spreadsheets.values.update({
+    //       spreadsheetId: SPREADSHEET_ID,
+    //       range: req.range,
+    //       valueInputOption: "RAW",
+    //       requestBody: { values: req.values },
+    //     });
+    //   }
+    // }
 
     return res
       .status(201)
