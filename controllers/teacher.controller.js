@@ -996,7 +996,7 @@ const checkInStudent = async (req, res) => {
     const smsapikey = "d97868cc69d36af20e76";
     const message = `Hi, your child ${student.name} has checked in`;
     const to = student.parent.phone;
-    const sender_id = "PrestigeLab";
+    const sender_id = "WoodBridge";
     const smsUrl = `https://sms.smsnotifygh.com/smsapi?key=${smsapikey}&to=${to}&msg=${encodeURIComponent(
       message
     )}&sender_id=${sender_id}`;
@@ -1064,7 +1064,7 @@ const checkOutStudent = async (req, res) => {
     const smsapikey = "d97868cc69d36af20e76";
     const message = `Hi, your child ${student.name} has checked out`;
     const to = student.parent.phone;
-    const sender_id = "PrestigeLab";
+    const sender_id = "WoodBridge";
 
     const smsUrl = `https://sms.smsnotifygh.com/smsapi?key=${smsapikey}&to=${to}&msg=${encodeURIComponent(
       message
